@@ -5,22 +5,20 @@ module Main where
 
 -- The state monad
 
-type State = [Bool]
+newtype ST s a = S (s -> (a, s))
 
-newtype ST a = S (State -> (a, State))
-
-app :: ST a -> State -> (a, State)
+app :: ST s a -> s -> (a, s)
 app (S st) = st
 
-instance Functor ST where
-  fmap :: (a -> b) -> ST a -> ST b
+instance Functor (ST s) where
+  fmap :: (a -> b) -> ST s a -> ST s b
   fmap g st = S (\s -> let (x, s') = app st s in (g x, s'))
 
-instance Applicative ST where
-  pure :: a -> ST a
+instance Applicative (ST s) where
+  pure :: a -> ST s a
   pure x = S (x,)
 
-  (<*>) :: ST (a -> b) -> ST a -> ST b
+  (<*>) :: ST s (a -> b) -> ST s a -> ST s b
   stf <*> stx =
     S
       ( \s ->
@@ -29,26 +27,37 @@ instance Applicative ST where
            in (f x, s'')
       )
 
-instance Monad ST where
-  (>>=) :: ST a -> (a -> ST b) -> ST b
+instance Monad (ST s) where
+  (>>=) :: ST s a -> (a -> ST s b) -> ST s b
   st >>= f = S (\s -> let (x, s') = app st s in app (f x) s')
 
 -- Logic Gates
 
 data Gate = In | Not Gate | And [Gate] | Or [Gate]
 
-next :: ST Bool
+next :: ST [Bool] Bool
 next = S (\(b : bs) -> (b, bs))
 
-evalA :: Gate -> ST Bool -> ST Bool
-evalA In i = i
-evalA (Not g) i = not <$> evalA g i
-evalA (And gs) i = and <$> sequenceA [evalA g i | g <- gs]
-evalA (Or gs) i = or <$> sequenceA [evalA g i | g <- gs]
+evalA :: Gate -> ST [Bool] Bool
+evalA In = next
+evalA (Not g) = (fmap not . evalA) g
+evalA (And gs) = (pure and <*>) . traverse evalA $ gs
+evalA (Or gs) = (pure or <*>) . traverse evalA $ gs
+
+evalM :: Gate -> ST [Bool] Bool
+evalM In = next
+evalM (Not g) = do
+  b <- evalM g
+  return (not b)
+evalM (And gs) = do
+    bs <- mapM evalM gs
+    return (and bs)
+evalM (Or gs) = do
+    bs <- mapM evalM gs
+    return (or bs)
 
 network :: Gate
-network = And [Or [In, Not In, In], Not (Or [In, In])]
+network = Or [Not (And [In, Not (Or [In, In]), Not In]), In]
 
 main :: IO ()
-main = print (app (evalA network next) [True, False, True, False, True])
-
+main = print (app (evalA network) [True, False, True, False, True])
