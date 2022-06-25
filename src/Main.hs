@@ -33,16 +33,16 @@ instance Monad (ST s) where
 
 -- Logic Gates
 
-data Gate = In | Not Gate | And [Gate] | Or [Gate]
+data Gate = In | Not Gate | And [Gate] | Or [Gate] deriving (Show)
 
 next :: ST [Bool] Bool
 next = S (\(b : bs) -> (b, bs))
 
 evalA :: Gate -> ST [Bool] Bool
 evalA In = next
-evalA (Not g) = (fmap not . evalA) g
-evalA (And gs) = (pure and <*>) . traverse evalA $ gs
-evalA (Or gs) = (pure or <*>) . traverse evalA $ gs
+evalA (Not g) = not <$> evalA g
+evalA (And gs) = and <$> traverse evalA gs
+evalA (Or gs) = or <$> traverse evalA gs
 
 evalM :: Gate -> ST [Bool] Bool
 evalM In = next
@@ -50,11 +50,11 @@ evalM (Not g) = do
   b <- evalM g
   return (not b)
 evalM (And gs) = do
-    bs <- mapM evalM gs
-    return (and bs)
+  bs <- mapM evalM gs
+  return (and bs)
 evalM (Or gs) = do
-    bs <- mapM evalM gs
-    return (or bs)
+  bs <- mapM evalM gs
+  return (or bs)
 
 network :: Gate
 network = Or [Not (And [In, Not (Or [In, In]), Not In]), In]
