@@ -56,8 +56,13 @@ evalM (Or gs) = do
   bs <- mapM evalM gs
   return (or bs)
 
+compile :: Gate -> [Bool] -> (Bool,[Bool])
+compile n = app (evalM n)
+
 network :: Gate
 network = Or [Not (And [In, Not (Or [In, In]), Not In]), In]
 
 main :: IO ()
-main = print (app (evalA network) [True, False, True, False, True])
+main = print (exec [True, False, True, False, True])
+  where
+    exec = compile network
